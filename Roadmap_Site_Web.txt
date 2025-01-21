@@ -1,0 +1,55 @@
+
+Roadmap de Développement : Site Web de Présentation
+
+Phase 1 : Initialisation du projet (1 jour)
+- Créer un nouveau projet avec React.js et Vite.
+- Installer et configurer les dépendances :
+  - Tailwind CSS, Framer Motion, Ant Design, React Router, Context API ou Redux Toolkit.
+- Configurer l'environnement de développement : ESLint, Prettier, et structure de dossiers.
+
+Phase 2 : Configuration et intégration de Tailwind CSS et Framer Motion (2 jours)
+- Configurer Tailwind CSS avec les couleurs et la police Poppins.
+- Créer des classes utilitaires personnalisées.
+- Intégrer Framer Motion pour des animations fluides.
+
+Phase 3 : Création des pages principales (Home, Contact) (5 jours)
+- Page Home : Présentation des produits avec Ant Design et carrousel.
+- Page Contact : Formulaire fonctionnel avec validation.
+- Navigation : Menu et footer responsifs.
+
+Phase 4 : Fonctionnalités côté visiteur (10 jours)
+- Authentification : Pages de connexion/inscription avec Firebase ou API.
+- Gestion des commandes : Ajouter des produits au panier, passer des commandes.
+- Suivi des commandes et retours : Historique des commandes et formulaire de retour.
+- Commentaires : Permettre aux utilisateurs de laisser des avis.
+
+Phase 5 : Développement du tableau de bord commerçant (12 jours)
+- Gestion des produits : CRUD pour les produits.
+- Gestion des commandes : Lister les commandes et gérer les retours.
+- Statistiques : Graphiques pour revenus, gains, et autres métriques.
+
+Phase 6 : Thème clair/sombre/système (2 jours)
+- Bouton pour basculer entre les thèmes.
+- Gestion automatique des thèmes en fonction des préférences système.
+
+Phase 7 : Finalisation de l’esthétique (2 jours)
+- Affiner l’apparence des pages selon la palette de couleurs.
+- Tester les animations et optimiser l’affichage pour appareils mobiles.
+
+Phase 8 : Tests, optimisation des performances, et déploiement (5 jours)
+- Tests unitaires et de bout en bout.
+- Optimisation des performances (lazy loading, compression).
+- Déploiement sur Vercel ou Netlify.
+
+Résumé des délais
+| Phase                        | Durée estimée |
+|------------------------------|---------------|
+| Initialisation du projet     | 1 jour        |
+| Configuration et intégrations| 2 jours       |
+| Création des pages principales| 5 jours      |
+| Fonctionnalités visiteur     | 10 jours      |
+| Tableau de bord commerçant   | 12 jours      |
+| Thème clair/sombre/système   | 2 jours       |
+| Finalisation esthétique      | 2 jours       |
+| Tests et déploiement         | 5 jours       |
+| **Total**                    | **39 jours**  |

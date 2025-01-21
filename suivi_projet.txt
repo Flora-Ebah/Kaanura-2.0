@@ -1,0 +1,19 @@
+Suivi du Projet : Site Web de Présentation
+
+Étape 1 : Initialisation du projet
+- [X] Projet créé avec React.js et Vite.
+- [X] Dépendances installées et configurées : Tailwind CSS, Framer Motion, Ant Design, React Router, Context API ou Redux Toolkit.
+- [X] Environnement de développement configuré : ESLint, Prettier, et structure de dossiers.
+
+Étape 2 : Configuration et intégration de Tailwind CSS et Framer Motion
+- [X] Configuration de Tailwind CSS avec les couleurs et la police Poppins.
+- [X] Création de classes utilitaires personnalisées.
+- [X] Intégration de Framer Motion pour des animations fluides.
+
+Étape 3 : Création des pages principales (Home, Contact)
+- [X] Page Home : Présentation des produits avec Ant Design et carrousel.
+- [X] Page Contact : Formulaire fonctionnel avec validation.
+- [X] Navigation : Menu et footer responsifs.
+- [X] Fichiers créés : `src/pages/Home.js`, `src/pages/Contact.js`.
+- [X] Composants créés : `src/components/ProductCarousel.js`, `src/components/ContactForm.js`.
+- [X] Composants ajoutés : `src/components/Header.js`, `src/components/Footer.js`, `src/components/Hero.js`. 
