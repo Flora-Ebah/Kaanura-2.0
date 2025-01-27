@@ -1,6 +1,17 @@
 import React from 'react';
+import { Register } from '../../actions/register';
 
 const SignUp = () => {
+
+  const [name,setName] = React.useState()
+  const [surname, setSurname] = React.useState()
+  const [tel, setTel] = React.useState()
+  const [email, setEmail] = React.useState()
+  const [password, setPassword] = React.useState()
+  const [confPassword, setConfPassword] = React.useState()
+
+  
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat sm:bg-[url('/background-2.png')] bg-[url('/5-1.png')]">
       <div className="w-full max-w-[1000px] grid md:grid-cols-2 gap-8 bg-[#1A1A1A]/80 rounded-2xl p-8">
@@ -16,7 +27,7 @@ const SignUp = () => {
         {/* Formulaire d'inscription */}
         <div className="bg-[#222] rounded-xl p-6">
           <h2 className="text-2xl font-bold text-white mb-6">Inscription</h2>
-          <form id="signupForm" className="space-y-4">
+          <form id="signupForm" className="space-y-4" onSubmit={(e)=>{e.preventDefault()}}>
             {/* Nom et Prénom */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -26,6 +37,7 @@ const SignUp = () => {
                   required
                   className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   name="firstName"
+                  onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div>
@@ -35,6 +47,7 @@ const SignUp = () => {
                   required
                   className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   name="lastName"
+                  onChange={(e) => setSurname(e.target.value)}
                 />
               </div>
             </div>
@@ -47,6 +60,7 @@ const SignUp = () => {
                 required
                 className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 name="email"
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
@@ -62,6 +76,7 @@ const SignUp = () => {
                   placeholder="77 XXX XX XX"
                   className="w-full pl-14 pr-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   name="phone"
+                  onChange={(e) => setTel(e.target.value)}
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1">Format: 77 XXX XX XX</p>
@@ -76,6 +91,7 @@ const SignUp = () => {
                 minLength="8"
                 className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 name="password"
+                onChange={(e) => setPassword(e.target.value)}
               />
               <p className="text-xs text-gray-400 mt-1">Minimum 8 caractères</p>
             </div>
@@ -89,10 +105,15 @@ const SignUp = () => {
                 minLength="8"
                 className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 name="confirmPassword"
+                onChange={(e) => setConfPassword(e.target.value)}
               />
             </div>
 
             <button 
+            onClick={()=>{
+             console.log("Confirm Password")
+              Register(name,surname,tel,email,password,confPassword)
+            }}
               className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
               type="submit"
             >

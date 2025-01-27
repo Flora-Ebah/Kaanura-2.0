@@ -13,6 +13,7 @@ import Customers from './pages/Admin/Customers';
 import AdminSettings from './pages/Admin/Settings';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
+import { Toaster } from 'react-hot-toast';
 
 const App = () => {
     return (
@@ -53,6 +54,7 @@ const App = () => {
                     <Route path="/admin/settings" element={<AdminSettings />} />
                 </Routes>
             </Router>
+            <Toaster />
         </CartProvider>
     );
 };

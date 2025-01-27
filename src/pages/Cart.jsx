@@ -2,6 +2,7 @@ import React from 'react';
 import { useCart } from '../context/CartContext';
 import { MinusOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import Footer from '../components/Footer';
+import Reservation from '../../actions/reserverProduit';
 
 const Cart = () => {
     const { cartItems, updateQuantity, removeFromCart, getTotal } = useCart();
@@ -80,7 +81,7 @@ const Cart = () => {
                                             <span>{getTotal()} €</span>
                                         </div>
                                     </div>
-                                    <button className="w-full mt-6 px-8 py-3 bg-[#8B5E34] text-white rounded-full hover:bg-[#4A2B0F] transition-colors">
+                                    <button onClick={()=>Reservation(cartItems)} className="w-full mt-6 px-8 py-3 bg-[#8B5E34] text-white rounded-full hover:bg-[#4A2B0F] transition-colors">
                                         Procéder au paiement
                                     </button>
                                 </div>

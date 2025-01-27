@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Upload, message, Card, Row, Col, Select, InputNumber } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ShoppingOutlined, DollarOutlined, InboxOutlined, ShoppingCartOutlined, BarChartOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import AdminLayout from '../../components/Admin/Layout/AdminLayout';
+import { child, get, ref } from 'firebase/database';
+import { db } from "/lib/firebase";
+import SaveProduct from '../../../actions/saveProd';
+
+
 
 const Products = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [form] = Form.useForm();
+    const [images, setImages] = React.useState()
+
 
     const products = [
         {
@@ -21,41 +28,19 @@ const Products = () => {
     ];
 
     // Ajout des statistiques
-    const stats = [
-        {
-            title: 'Total Produits',
-            value: products.length,
-            icon: <ShoppingCartOutlined />,
-            color: 'text-indigo-600',
-            trend: '+12% ce mois'
-        },
-        {
-            title: 'Valeur du Stock',
-            value: '2,345.00 €',
-            icon: <BarChartOutlined />,
-            color: 'text-emerald-600',
-            trend: '+8.5% ce mois'
-        },
-        {
-            title: 'Stock Faible',
-            value: '3 produits',
-            icon: <ExclamationCircleOutlined />,
-            color: 'text-rose-600',
-            trend: '-2 depuis hier'
-        }
-    ];
+ 
 
     const columns = [
         {
             title: 'Image',
-            dataIndex: 'image',
-            key: 'image',
+            dataIndex: 'img',
+            key: 'img',
             render: (image) => <img src={image} alt="" className="w-12 h-12 rounded-lg object-cover" />
         },
         {
             title: 'Nom',
-            dataIndex: 'name',
-            key: 'name',
+            dataIndex: 'title',
+            key: 'title',
         },
         {
             title: 'Prix',
@@ -78,8 +63,8 @@ const Products = () => {
         },
         {
             title: 'Catégorie',
-            dataIndex: 'category',
-            key: 'category',
+            dataIndex: 'categorie',
+            key: 'categorie',
         },
         {
             title: 'Actions',
@@ -118,13 +103,84 @@ const Products = () => {
         });
     };
 
-    const handleSubmit = (values) => {
-        console.log(values);
+    const handleSubmit =async  (values) => {
+        console.log(images);
+        const formData = new FormData();
+        formData.append('file', images);
+        formData.append('upload_preset', 'kanuura');
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/do59jclns/image/upload`, 
+            {
+              method: 'POST',
+              body:formData,
+            }
+          );
+          console.log("Response",response)
+          if (!response.ok) {
+            
+            throw new Error('Upload failed');
+          }
+    
+          const data = await response.json();
+          
+        SaveProduct(values.name, values.category, values.price,  values.stock, "disponible", data.secure_url)
         message.success(`Produit ${editingProduct ? 'modifié' : 'ajouté'} avec succès`);
         setIsModalVisible(false);
         form.resetFields();
         setEditingProduct(null);
     };
+
+    const [Products,setProducts] = React.useState()
+    
+
+
+    useEffect(() => {
+        const dbRef = ref(db);
+        get(child(dbRef, `produits/`)).then((snapshot) => {
+          if (snapshot.exists()) {
+            console.log(snapshot.val());
+             setProducts(snapshot.val())
+          } else {
+            // console.log("No data available");
+            setProducts(null);
+          }
+        }).catch((error) => {
+          console.error(error);
+          setProducts(null);
+         
+        });
+      },[])
+
+
+      const stats = [
+        {
+            title: 'Total Produits',
+            value: Products ? Object.values(Products).length : 0    ,
+            icon: <ShoppingCartOutlined />,
+            color: 'text-indigo-600',
+            trend: 'ce mois'
+            // trend: '+12% ce mois'
+        },
+        {
+            title: 'Valeur du Stock',
+            value: '2,345.00 €',
+            icon: <BarChartOutlined />,
+            color: 'text-emerald-600',
+            trend: '+8.5% ce mois'
+        },
+        {
+            title: 'Stock Faible',
+            value: '3 produits',
+            icon: <ExclamationCircleOutlined />,
+            color: 'text-rose-600',
+            trend: '-2 depuis hier'
+        }
+    ];
+
+
+
+    
+
 
     return (
         <AdminLayout>
@@ -230,7 +286,7 @@ const Products = () => {
                 <Card className="overflow-x-auto">
                     <Table 
                         columns={columns} 
-                        dataSource={products}
+                        dataSource={Products ? Object.values(Products) : []}
                         rowKey="id"
                         className="product-table"
                         scroll={{ x: 'max-content' }}
@@ -263,7 +319,7 @@ const Products = () => {
                                     name="image"
                                     label="Image"
                                 >
-                                    <Upload.Dragger
+                                    {/* <Upload.Dragger
                                         maxCount={1}
                                         listType="picture-card"
                                         showUploadList={{showPreviewIcon: true}}
@@ -272,7 +328,9 @@ const Products = () => {
                                             <InboxOutlined />
                                         </p>
                                         <p className="text-sm md:text-base">Cliquez ou glissez une image ici</p>
-                                    </Upload.Dragger>
+                                    </Upload.Dragger> */}
+                                    <input type='file' accept='image/*' onChange={(e)=>setImages(e.target.files[0])}/>
+                                    
                                 </Form.Item>
                             </Col>
                             <Col xs={24} md={12}>

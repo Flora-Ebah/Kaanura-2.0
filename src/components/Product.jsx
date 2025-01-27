@@ -1,38 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { Modal } from 'antd';
 import { useCart } from '../context/CartContext';
 import { message } from 'antd';
+import { child, get, ref } from "firebase/database";
+import { db } from "/lib/firebase";
 
-const products = [
-    {
-        name: "Masque Fortifiant Cacao Miel",
-        img: "/MOUSSE.jpeg",
-        price: "25.99 €",
-        description: "Ce masque à l'huile de Cacao et miel, est idéal pour les cheveux abîmés, gras, fins sans volume, fragiles, ternes, sans éclat. Il fortifie, nourrit, répare, purifie, apporte du volume et de la brillance.",
-        quantite: "150 ml / 250 ml",
-        ingredient: "Eau, Cacao, Miel, Protéines, Huile essentielle, Vitamine E"
-    },
-    {
-        name: "Leave-In Hydratant Volume & Pousse",
-        img: "/SOIN1.jpeg",
-        price: "35.99 €",
-        description: "Cette lotion de jour au cacao, à l'aloé véra et à l'avocat, apporte à vos cheveux l'hydratation nécessaire au quotidien. Il nourrit, répare et apporte du volume et de la brillance. Il facilite le démêlage et dessine les boucles.",
-        quantite: "250 ml",
-        ingredient: "Eau, Cacao, Protéines, Huile essentielle, Vitamine E"
-    },
-    {
-        name: "Huile Pousse",
-        img: "/SOIN2.jpeg",
-        price: "35.99 €",
-        description: "Ce cocktail d'huiles végétales naturelles active la pousse des cheveux et donne du volume. Il nourrit le cuir chevelu et apporte de la brillance aux cheveux. A appliquer sur le cuir chevelu, les pointes et les tempes.",
-        quantite: "100 ml",
-        ingredient: "Cocktail de 11 huiles végétales naturelles, Huile essentielle"
-    },
-];
+
 
 const Product = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [Products, setProducts] = useState();
     const [quantity, setQuantity] = useState(1);
     const { addToCart } = useCart();
 
@@ -56,11 +34,31 @@ const Product = () => {
         setQuantity(prev => prev > 1 ? prev - 1 : 1);
     };
 
-    const handleAddToCart = () => {
-        addToCart(selectedProduct, quantity);
-        message.success(`${quantity} ${selectedProduct.name} ajouté(s) au panier`);
+    const handleAddToCart = (id) => {
+        addToCart(selectedProduct, quantity,id);
+        message.success(`${quantity} ${selectedProduct.title} ajouté(s) au panier`);
         closeModal();
     };
+
+
+    useEffect(() => {
+        const dbRef = ref(db);
+        get(child(dbRef, `produits/`)).then((snapshot) => {
+          if (snapshot.exists()) {
+            console.log(snapshot.val());
+             setProducts(snapshot.val())
+          } else {
+            // console.log("No data available");
+            setProducts(null);
+          }
+        }).catch((error) => {
+          console.error(error);
+          setProducts(null);
+         
+        });
+      },[])
+
+
 
     return (
         <section className="py-24 bg-[#FDFBF7]" id="nos-produits">
@@ -82,7 +80,7 @@ const Product = () => {
                     {/* Version mobile avec défilement horizontal */}
                     <div className="md:hidden overflow-x-auto hide-scrollbar">
                         <div className="flex space-x-4 px-4">
-                            {products.map((product, index) => (
+                            {Products ? Object.values(Products).map((product, index) => (
                                 <div 
                                     key={index}
                                     className="group cursor-pointer flex-none w-[280px]"
@@ -92,14 +90,14 @@ const Product = () => {
                                         <div className="aspect-[3/4] rounded-lg overflow-hidden">
                                             <img 
                                                 src={product.img}
-                                                alt={product.name}
+                                                alt={product.title}
                                                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                                             />
                                         </div>
                                         <div className="absolute aspect-[3/4] inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent transition-opacity duration-500">
                                             <div className="absolute bottom-0 left-0 p-4 text-white">
                                                 <div className="flex items-center space-x-2 mb-2">
-                                                    <h3 className="text-lg font-light">{product.name}</h3>
+                                                    <h3 className="text-lg font-light">{product.title}</h3>
                                                 </div>
                                                 <p className="text-sm text-white/80 leading-relaxed font-light">
                                                     {product.price}
@@ -108,13 +106,13 @@ const Product = () => {
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                            )) : <h1 className='text-center text-2xl'> Aucun produit disponible</h1>}
                         </div>
                     </div>
 
                     {/* Version desktop en grille */}
                     <div className="hidden md:grid md:grid-cols-3 gap-8">
-                        {products.map((product, index) => (
+                        {Products ? Object.values(Products).map((product, index) => (
                             <div 
                                 key={`desktop-${index}`}
                                 className="group cursor-pointer"
@@ -124,7 +122,7 @@ const Product = () => {
                                     <div className="aspect-[3/4] rounded-lg overflow-hidden">
                                         <img 
                                             src={product.img}
-                                            alt={product.name}
+                                            alt={product.title}
                                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                                         />
                                     </div>
@@ -132,14 +130,14 @@ const Product = () => {
                                 <div className="space-y-2">
                                     <div className="flex items-center space-x-2">
                                         <div className="w-4 h-[1px] bg-[#8B5E34]"></div>
-                                        <h3 className="text-lg font-light text-[#4A2B0F]">{product.name}</h3>
+                                        <h3 className="text-lg font-light text-[#4A2B0F]">{product.title}</h3>
                                     </div>
                                     <p className="text-sm ml-6 text-gray-600 leading-relaxed font-light">
                                         {product.price}
                                     </p>
                                 </div>
                             </div>
-                        ))}
+                        ) ): <h1 className='text-center text-2xl'> Aucun produit disponible</h1>}
                     </div>
                 </div>
             </div>
@@ -159,13 +157,13 @@ const Product = () => {
                                 <div className="aspect-[3/4] rounded-lg overflow-hidden">
                                     <img 
                                         src={selectedProduct.img}
-                                        alt={selectedProduct.name}
+                                        alt={selectedProduct.title}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
                             </div>
                             <div className="md:w-1/2 space-y-4">
-                                <h3 className="text-2xl font-light text-[#4A2B0F]">{selectedProduct.name}</h3>
+                                <h3 className="text-2xl font-light text-[#4A2B0F]">{selectedProduct.title}</h3>
                                 <div className="w-20 h-[1px] bg-[#8B5E34]"></div>
                                 <p className="text-xl font-light text-[#8B5E34]">{selectedProduct.price}</p>
                                 <p className="text-gray-600 leading-relaxed">{selectedProduct.description}</p>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
     UserOutlined, 
@@ -16,6 +16,10 @@ import {
 } from '@ant-design/icons';
 import { Drawer, Dropdown } from 'antd';
 import { useCart } from '../context/CartContext';
+import { auth } from "/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import toast from 'react-hot-toast';
+import Logout from '../../actions/logout';
 
 const Header = () => {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -56,7 +60,7 @@ const Header = () => {
             icon: <LogoutOutlined />,
             onClick: () => {
                 setIsLoggedIn(false);
-                console.log('Déconnexion clicked');
+                Logout()
             }
         }
     ];
@@ -86,6 +90,22 @@ const Header = () => {
             goToSection();
         }
     };
+
+
+    const [isLogged,setISlogged] = useState(false);
+  useEffect(() => {
+         onAuthStateChanged(auth, (user) => {
+             if (user) {
+                setISlogged(true)
+             }else{
+                setISlogged(false)
+             }
+     })
+ 
+ 
+     },[isLogged])
+
+
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-[#fff4de]/40 backdrop-blur-sm shadow-sm">
@@ -122,7 +142,7 @@ const Header = () => {
                     </ul>
                 </div>
                 <div className="flex items-center space-x-10">
-                    <Dropdown 
+                    {isLogged ? <Dropdown 
                         menu={{ items: userMenuItems }} 
                         placement="bottomRight"
                         trigger={['click']}
@@ -134,7 +154,10 @@ const Header = () => {
                                 <CheckCircleFilled className="text-green-500 text-sm absolute -top-1 -right-2" />
                             )}
                         </button>
-                    </Dropdown>
+                    </Dropdown> :   <a href="/Login" color="default" className="px-4 py-2 bg-[#4a2b0f] text-white rounded-[10px] hover:bg-[#755e49] transition duration-300" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 400, fontSize: '16px', lineHeight: '24px' }}>
+            Connexion
+          </a> }
+                    
                     <button 
                         onClick={() => navigate('/cart')}
                         className="relative text-[#4a2b0f] dark:text-white hover:text-[#795f45] text-lg"

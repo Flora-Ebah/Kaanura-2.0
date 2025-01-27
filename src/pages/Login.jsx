@@ -1,6 +1,14 @@
 import React from 'react';
+import { LoginFun } from '../../actions/login';
 
 const Login = () => {
+
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+
+
+
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat sm:bg-[url('/background.png')] bg-[url('/5-1.png')]">
       <div className="w-full max-w-[1000px] grid md:grid-cols-2 gap-8 bg-[#1A1A1A]/80 rounded-2xl p-8">
@@ -16,7 +24,9 @@ const Login = () => {
         {/* Formulaire de connexion */}
         <div className="bg-[#222] rounded-xl p-6">
           <h2 className="text-2xl font-bold text-white mb-6">Connexion</h2>
-          <form id="loginForm" className="space-y-4" method="POST">
+          <form id="loginForm" className="space-y-4" method='POST' onSubmit={(e)=>{
+            e.preventDefault()
+          }}  >
             <div>
               <label className="block text-sm text-gray-300 mb-2">Email</label>
               <input 
@@ -24,6 +34,7 @@ const Login = () => {
                 required
                 className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 name="email"
+                onChange={(e)=>setEmail(e.target.value)}
               />
             </div>
 
@@ -34,6 +45,7 @@ const Login = () => {
                 required
                 className="w-full px-4 py-2 bg-[#333] text-white rounded-lg border border-gray-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 name="password"
+                onChange={(e)=>setPassword(e.target.value)}
               />
               <a href="/forgot-password" className="text-xs text-gray-400 hover:text-orange-500 mt-1 block text-right">
                 Mot de passe oublié ?
@@ -43,6 +55,7 @@ const Login = () => {
             <button 
               className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
               type="submit"
+              onClick={()=>{console.log("good"),LoginFun(email,password)}}
             >
               Se connecter
             </button>

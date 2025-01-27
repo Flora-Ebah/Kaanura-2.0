@@ -5,14 +5,14 @@ const CartContext = createContext();
 export const CartProvider = ({ children }) => {
     const [cartItems, setCartItems] = useState([]);
 
-    const addToCart = (product, quantity) => {
+    const addToCart = (product, quantity, id ) => {
         setCartItems(prevItems => {
             const existingItem = prevItems.find(item => item.name === product.name);
             
             if (existingItem) {
                 return prevItems.map(item =>
                     item.name === product.name
-                        ? { ...item, quantity: item.quantity + quantity }
+                        ? { ...item, quantity: item.quantity + quantity, identifiant:id, status:"En cours" }
                         : item
                 );
             }

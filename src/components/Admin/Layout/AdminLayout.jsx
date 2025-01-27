@@ -10,6 +10,7 @@ import {
     SettingOutlined,
     LogoutOutlined
 } from '@ant-design/icons';
+import Logout from '../../../../actions/logout';
 
 const AdminLayout = ({ children }) => {
     const [collapsed, setCollapsed] = useState(false);
@@ -123,7 +124,7 @@ const AdminLayout = ({ children }) => {
                         className="flex items-center gap-3 p-3 rounded-lg w-full mt-8 text-[#4A2B0F] hover:bg-[#fff5e6]"
                     >
                         <LogoutOutlined />
-                        {(!collapsed || isMobile) && <span>Déconnexion</span>}
+                        {(!collapsed || isMobile) && <span onClick={Logout}>Déconnexion</span>}
                     </button>
                 </nav>
             </div>
