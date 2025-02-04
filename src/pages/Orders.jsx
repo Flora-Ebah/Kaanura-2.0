@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Footer from '../components/Footer';
 import { 
@@ -10,45 +11,138 @@ import {
     SearchOutlined,
     FilterOutlined
 } from '@ant-design/icons';
+import { message } from 'antd';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const Orders = () => {
     const { cartItems } = useCart();
+    const [orders, setOrders] = useState({
+        'en-cours': [],
+        'livrees': [],
+        'retours': [],
+        'historique': []
+    });
+    const [loading, setLoading] = useState(true);
+    const [dataLoaded, setDataLoaded] = useState(false);
     const [activeTab, setActiveTab] = useState('en-cours');
     const [searchTerm, setSearchTerm] = useState('');
+    const [user, setUser] = useState(null);
+    const navigate = useNavigate();
 
-    // Simuler différents types de commandes
-    const orders = {
-        'en-cours': [
-            {
-                id: '1',
-                date: '2024-03-20',
-                status: 'En préparation',
-                items: cartItems,
-                total: '89.99',
-                estimatedDelivery: '2024-03-25'
+    // Écouter l'état de l'authentification
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            if (!currentUser) {
+                message.info("Veuillez vous connecter pour voir vos commandes");
+                navigate('/login');
             }
-        ],
-        'livrees': [
-            {
-                id: '2',
-                date: '2024-03-15',
-                status: 'Livrée',
-                items: cartItems,
-                total: '129.99',
-                deliveryDate: '2024-03-18'
+        });
+
+        return () => unsubscribe();
+    }, [navigate]);
+
+    // Charger les commandes de l'utilisateur
+    useEffect(() => {
+        let unsubscribeOrders = null;
+
+        const fetchOrders = async () => {
+            if (!user) {
+                setLoading(false);
+                return;
             }
-        ],
-        'retours': [
-            {
-                id: '3',
-                date: '2024-03-10',
-                status: 'Retour accepté',
-                items: cartItems.slice(0, 1),
-                total: '45.99',
-                returnReason: 'Taille incorrecte'
+
+            setLoading(true);
+            try {
+                const q = query(
+                    collection(db, 'orders'),
+                    where('userId', '==', user.uid)
+                );
+
+                unsubscribeOrders = onSnapshot(q, (snapshot) => {
+                    const fetchedOrders = {
+                        'en-cours': [],
+                        'livrees': [],
+                        'retours': [],
+                        'historique': []
+                    };
+
+                    const sortedDocs = [...snapshot.docs].sort((a, b) => {
+                        const dateA = a.data().createdAt || '';
+                        const dateB = b.data().createdAt || '';
+                        return dateB.localeCompare(dateA);
+                    });
+
+                    sortedDocs.forEach(doc => {
+                        const order = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
+
+                        // Classer les commandes selon leur statut
+                        switch (order.status) {
+                            case 'En attente':
+                            case 'En préparation':
+                            case 'En livraison':
+                                fetchedOrders['en-cours'].push(order);
+                                break;
+                            case 'Livrée':
+                                fetchedOrders['livrees'].push(order);
+                                fetchedOrders['historique'].push(order);
+                                break;
+                            case 'Retournée':
+                            case 'Retour en cours':
+                                fetchedOrders['retours'].push(order);
+                                fetchedOrders['historique'].push(order);
+                                break;
+                            default:
+                                fetchedOrders['historique'].push(order);
+                        }
+                    });
+
+                    setOrders(fetchedOrders);
+                    setLoading(false);
+                    setDataLoaded(true);
+                });
+
+            } catch (error) {
+                console.error("Erreur lors du chargement des commandes:", error);
+                message.error("Erreur lors du chargement des commandes");
+                setLoading(false);
+                setDataLoaded(true);
             }
-        ]
+        };
+
+        fetchOrders();
+
+        return () => {
+            if (unsubscribeOrders) {
+                unsubscribeOrders();
+            }
+        };
+    }, [user]);
+
+    // Formater la date
+    const formatDate = (dateString) => {
+        return new Date(dateString).toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
     };
+
+    // Filtrer les commandes selon la recherche
+    const filteredOrders = orders[activeTab]?.filter(order => {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+            order.id.toLowerCase().includes(searchLower) ||
+            order.items.some(item => 
+                item.name.toLowerCase().includes(searchLower)
+            )
+        );
+    });
 
     const tabs = [
         { id: 'en-cours', label: 'En cours', icon: <ClockCircleOutlined /> },
@@ -63,8 +157,12 @@ const Orders = () => {
                 <div className="flex flex-col gap-2 mb-4">
                     <div className="flex justify-between items-start">
                         <div>
-                            <h3 className="text-lg font-medium text-[#4A2B0F]">Commande #{order.id}</h3>
-                            <p className="text-sm text-[#8B5E34]">Passée le {order.date}</p>
+                            <h3 className="text-lg font-medium text-[#4A2B0F]">
+                                Commande #{order.id.slice(-6)}
+                            </h3>
+                            <p className="text-sm text-[#8B5E34]">
+                                Passée le {formatDate(order.createdAt)}
+                            </p>
                         </div>
                         <span className="px-3 py-1 rounded-full text-sm bg-[#fff5e6] text-[#8B5E34]">
                             {order.status}
@@ -72,30 +170,32 @@ const Orders = () => {
                     </div>
                     <div className="flex justify-between items-center">
                         <p className="text-sm text-[#8B5E34]">Total</p>
-                        <p className="text-lg font-medium text-[#4A2B0F]">{order.total} €</p>
+                        <p className="text-lg font-medium text-[#4A2B0F]">
+                            {order.totalAmount} FCFA
+                        </p>
                     </div>
                 </div>
-                
-                {order.estimatedDelivery && (
-                    <p className="text-sm text-[#8B5E34] mb-4">
-                        Livraison estimée : {order.estimatedDelivery}
-                    </p>
-                )}
 
                 <div className="space-y-3">
-                    {order.items.map((item) => (
-                        <div key={item.name} className="flex gap-3 p-3 bg-[#fff5e6] rounded-lg">
+                    {order.items.map((item, index) => (
+                        <div key={index} className="flex gap-3 p-3 bg-[#fff5e6] rounded-lg">
                             <img 
-                                src={item.img} 
+                                src={item.imageUrl} 
                                 alt={item.name} 
                                 className="w-16 h-16 object-cover rounded-md flex-shrink-0"
                             />
                             <div className="flex-grow min-w-0">
-                                <h4 className="text-[#4A2B0F] font-medium truncate">{item.name}</h4>
-                                <p className="text-sm text-[#8B5E34]">Quantité: {item.quantity}</p>
+                                <h4 className="text-[#4A2B0F] font-medium truncate">
+                                    {item.name}
+                                </h4>
+                                <p className="text-sm text-[#8B5E34]">
+                                    Quantité: {item.quantity}
+                                </p>
                                 <div className="flex justify-between items-center mt-1">
-                                    <p className="text-[#4A2B0F] font-medium">{item.price}</p>
-                                    {activeTab === 'livrees' && (
+                                    <p className="text-[#4A2B0F] font-medium">
+                                        {item.price} FCFA
+                                    </p>
+                                    {order.status === 'Livrée' && (
                                         <button className="text-sm text-[#8B5E34] hover:text-[#4A2B0F] flex items-center gap-1">
                                             <StarOutlined /> Évaluer
                                         </button>
@@ -124,6 +224,34 @@ const Orders = () => {
             </div>
         </div>
     );
+
+    if (!user) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-[#fff5e6]">
+                <h2 className="text-xl font-medium text-[#4A2B0F] mb-4">
+                    Connexion requise
+                </h2>
+                <p className="text-[#8B5E34] mb-6">
+                    Veuillez vous connecter pour voir vos commandes
+                </p>
+                <button
+                    onClick={() => navigate('/login')}
+                    className="px-6 py-2 bg-[#8B5E34] text-white rounded-full hover:bg-[#4A2B0F] transition-colors"
+                >
+                    Se connecter
+                </button>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-[#fff5e6]">
+                <div className="w-16 h-16 border-4 border-[#8B5E34] border-t-transparent rounded-full animate-spin"></div>
+                <p className="mt-4 text-[#4A2B0F]">Chargement de vos commandes...</p>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -170,8 +298,8 @@ const Orders = () => {
                     </div>
 
                     <div className="space-y-4">
-                        {orders[activeTab]?.length > 0 ? (
-                            orders[activeTab].map(order => renderOrderCard(order))
+                        {filteredOrders?.length > 0 ? (
+                            filteredOrders.map(order => renderOrderCard(order))
                         ) : (
                             <div className="text-center py-8 bg-white rounded-lg">
                                 <h2 className="text-xl font-light text-[#4A2B0F] mb-2">

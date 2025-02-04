@@ -1,6 +1,71 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { auth, db } from '../config/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Login = () => {
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Écouter les changements d'authentification
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        // Si l'utilisateur vient d'ajouter un produit au panier
+        const pendingCartItem = localStorage.getItem('pendingCartItem');
+        if (pendingCartItem) {
+          localStorage.removeItem('pendingCartItem');
+          // Rediriger vers la page des produits
+          navigate('/products');
+        } else {
+          // Rediriger vers la page précédente ou la page d'accueil
+          navigate(location.state?.from || '/');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate, location]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const formData = new FormData(e.target);
+    
+    try {
+      // 1. Authentifier l'utilisateur
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        formData.get('email'),
+        formData.get('password')
+      );
+      
+      // 2. Récupérer les données utilisateur depuis Firestore
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        // 3. Rediriger en fonction du type d'utilisateur
+        if (userData.type_user === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
+      } else {
+        setError('Erreur: Données utilisateur introuvables');
+      }
+    } catch (err) {
+      console.error('Erreur de connexion:', err);
+      setError('Email ou mot de passe incorrect');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat sm:bg-[url('/background.png')] bg-[url('/5-1.png')]">
       <div className="w-full max-w-[1000px] grid md:grid-cols-2 gap-8 bg-[#1A1A1A]/80 rounded-2xl p-8">
@@ -16,7 +81,14 @@ const Login = () => {
         {/* Formulaire de connexion */}
         <div className="bg-[#222] rounded-xl p-6">
           <h2 className="text-2xl font-bold text-white mb-6">Connexion</h2>
-          <form id="loginForm" className="space-y-4" method="POST">
+          
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4" method="POST">
             <div>
               <label className="block text-sm text-gray-300 mb-2">Email</label>
               <input 
@@ -43,8 +115,9 @@ const Login = () => {
             <button 
               className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
               type="submit"
+              disabled={loading}
             >
-              Se connecter
+              {loading ? 'Connexion...' : 'Se connecter'}
             </button>
 
             {/* Séparateur */}

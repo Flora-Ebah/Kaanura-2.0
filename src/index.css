@@ -123,3 +123,80 @@
 .settings-tabs .ant-tabs-ink-bar {
     background-color: #8B5E34;
 }
+
+@keyframes custom-spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: custom-spin 1s linear infinite;
+}
+
+/* Animations pour le loader */
+@keyframes spin-slow {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes spin-reverse {
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+@keyframes spin-fast {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
+}
+
+.animate-spin-reverse {
+    animation: spin-reverse 2s linear infinite;
+}
+
+.animate-spin-fast {
+    animation: spin-fast 1s linear infinite;
+}
+
+/* Animation des points de chargement */
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    50% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+.animate-bounce {
+    animation: bounce 1s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.bg-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+        to right,
+        rgba(139, 94, 52, 0.02) 8%,
+        rgba(139, 94, 52, 0.05) 18%,
+        rgba(139, 94, 52, 0.02) 33%
+    );
+    background-size: 1000px 100%;
+}

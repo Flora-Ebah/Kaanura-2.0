@@ -1,56 +1,267 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Upload, message, Card, Row, Col, Select, InputNumber } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ShoppingOutlined, DollarOutlined, InboxOutlined, ShoppingCartOutlined, BarChartOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ShoppingOutlined, DollarOutlined, InboxOutlined, ShoppingCartOutlined, BarChartOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { db, auth } from '../../config/firebase';
+import { 
+    collection, 
+    addDoc, 
+    getDocs, 
+    doc, 
+    updateDoc, 
+    deleteDoc,
+    query,
+    where,
+    orderBy,
+    getDoc
+} from 'firebase/firestore';
 import AdminLayout from '../../components/Admin/Layout/AdminLayout';
+import { useNavigate } from 'react-router-dom';
+import { uploadImage } from '../../config/cloudinary';
 
 const Products = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [searchText, setSearchText] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [sortOrder, setSortOrder] = useState('');
     const [form] = Form.useForm();
-
-    const products = [
-        {
-            id: 1,
-            name: 'Huile de Ricin',
-            price: '29.99€',
-            stock: 45,
-            category: 'Huiles',
-            image: '/path/to/image.jpg'
-        },
-        // ... autres produits
-    ];
-
-    // Ajout des statistiques
-    const stats = [
+    const [stats, setStats] = useState([
         {
             title: 'Total Produits',
-            value: products.length,
+            value: 0,
             icon: <ShoppingCartOutlined />,
             color: 'text-indigo-600',
-            trend: '+12% ce mois'
+            trend: 'Total'
         },
         {
             title: 'Valeur du Stock',
-            value: '2,345.00 €',
+            value: '0.00 €',
             icon: <BarChartOutlined />,
             color: 'text-emerald-600',
-            trend: '+8.5% ce mois'
+            trend: 'Total'
         },
         {
             title: 'Stock Faible',
-            value: '3 produits',
+            value: '0 produits',
             icon: <ExclamationCircleOutlined />,
             color: 'text-rose-600',
-            trend: '-2 depuis hier'
+            trend: 'À réapprovisionner'
         }
-    ];
+    ]);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const navigate = useNavigate();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fonction pour formater le prix en FCFA
+    const formatPrice = (price) => {
+        return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+    };
+
+    // Nouvelles fonctions pour calculer les statistiques
+    const calculateStockStats = (productsData) => {
+        const lowStockThreshold = 10; // Seuil de stock faible
+        
+        // Calculer la valeur totale du stock
+        const totalStockValue = productsData.reduce((total, product) => {
+            return total + (product.price * product.stock);
+        }, 0);
+
+        // Compter les produits en stock faible
+        const lowStockProducts = productsData.filter(product => product.stock <= lowStockThreshold);
+
+        return {
+            totalValue: formatPrice(totalStockValue),
+            lowStockCount: lowStockProducts.length
+        };
+    };
+
+    // Charger les produits
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            let productsQuery = collection(db, 'products');
+            let queries = [];
+
+            // Créer la requête en fonction des filtres et tris
+            if (categoryFilter && sortOrder) {
+                // Si on a à la fois un filtre de catégorie et un tri
+                switch(sortOrder) {
+                    case 'price_asc':
+                        productsQuery = query(productsQuery,
+                            where('category', '==', categoryFilter),
+                            orderBy('price', 'asc')
+                        );
+                        break;
+                    case 'price_desc':
+                        productsQuery = query(productsQuery,
+                            where('category', '==', categoryFilter),
+                            orderBy('price', 'desc')
+                        );
+                        break;
+                    case 'stock_low':
+                        productsQuery = query(productsQuery,
+                            where('category', '==', categoryFilter),
+                            orderBy('stock', 'asc')
+                        );
+                        break;
+                    default:
+                        productsQuery = query(productsQuery,
+                            where('category', '==', categoryFilter)
+                        );
+                }
+            } else {
+                // Si on n'a qu'un filtre de catégorie
+                if (categoryFilter) {
+                    queries.push(where('category', '==', categoryFilter));
+                }
+                // Si on n'a qu'un tri
+                if (sortOrder) {
+                    switch(sortOrder) {
+                        case 'price_asc':
+                            queries.push(orderBy('price', 'asc'));
+                            break;
+                        case 'price_desc':
+                            queries.push(orderBy('price', 'desc'));
+                            break;
+                        case 'stock_low':
+                            queries.push(orderBy('stock', 'asc'));
+                            break;
+                    }
+                }
+                if (queries.length > 0) {
+                    productsQuery = query(productsQuery, ...queries);
+                }
+            }
+
+            const querySnapshot = await getDocs(productsQuery);
+            const productsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            // Filtrer par recherche côté client
+            const filteredProducts = searchText 
+                ? productsData.filter(product => 
+                    product.name.toLowerCase().includes(searchText.toLowerCase())
+                )
+                : productsData;
+
+            // Calculer les statistiques
+            const stockStats = calculateStockStats(productsData);
+            
+            // Mettre à jour les stats
+            setStats([
+                {
+                    title: 'Total Produits',
+                    value: productsData.length,
+                    icon: <ShoppingCartOutlined />,
+                    color: 'text-indigo-600',
+                    trend: 'Total'
+                },
+                {
+                    title: 'Valeur du Stock',
+                    value: stockStats.totalValue,
+                    icon: <BarChartOutlined />,
+                    color: 'text-emerald-600',
+                    trend: 'Total'
+                },
+                {
+                    title: 'Stock Faible',
+                    value: `${stockStats.lowStockCount} produits`,
+                    icon: <ExclamationCircleOutlined />,
+                    color: 'text-rose-600',
+                    trend: 'À réapprovisionner'
+                }
+            ]);
+
+            setProducts(filteredProducts);
+        } catch (error) {
+            console.error("Erreur lors du chargement des produits:", error);
+            
+            if (error.message.includes('index')) {
+                const indexUrl = error.message.split('here: ')[1];
+                console.log("Créez l'index requis ici :", indexUrl);
+                
+                // Message plus détaillé pour l'utilisateur
+                Modal.error({
+                    title: 'Configuration requise',
+                    content: (
+                        <div>
+                            <p>Une configuration d'index est nécessaire pour cette combinaison de filtres et de tri.</p>
+                            <p>Veuillez suivre ces étapes :</p>
+                            <ol className="list-decimal ml-4">
+                                <li>Cliquez sur le lien dans la console développeur</li>
+                                <li>Connectez-vous à Firebase</li>
+                                <li>Cliquez sur "Create Index"</li>
+                                <li>Attendez que l'index soit créé (environ 1-2 minutes)</li>
+                                <li>Réessayez votre recherche</li>
+                            </ol>
+                        </div>
+                    ),
+                    okText: 'Compris'
+                });
+            } else {
+                message.error("Erreur lors du chargement des produits");
+            }
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchProducts();
+    }, [searchText, categoryFilter, sortOrder]);
+
+    // Vérifier si l'utilisateur est admin
+    useEffect(() => {
+        const checkAdminStatus = async () => {
+            const user = auth.currentUser;
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (!userDoc.exists() || userDoc.data().type_user !== 'admin') {
+                    navigate('/login');
+                    return;
+                }
+                setIsAdmin(true);
+            } catch (error) {
+                console.error("Erreur lors de la vérification du statut admin:", error);
+                navigate('/login');
+            }
+        };
+
+        checkAdminStatus();
+    }, [navigate]);
+
+    // Remplacez la fonction uploadImage par celle-ci
+    const handleImageUpload = async (file) => {
+        if (!file) return null;
+        try {
+            return await uploadImage(file);
+        } catch (error) {
+            message.error("Erreur lors de l'upload de l'image");
+            console.error(error);
+            return null;
+        }
+    };
 
     const columns = [
         {
             title: 'Image',
-            dataIndex: 'image',
+            dataIndex: 'imageUrl',
             key: 'image',
-            render: (image) => <img src={image} alt="" className="w-12 h-12 rounded-lg object-cover" />
+            render: (imageUrl) => (
+                <img 
+                    src={imageUrl || '/placeholder-image.png'} 
+                    alt="" 
+                    className="w-12 h-12 rounded-lg object-cover"
+                />
+            )
         },
         {
             title: 'Nom',
@@ -61,6 +272,7 @@ const Products = () => {
             title: 'Prix',
             dataIndex: 'price',
             key: 'price',
+            render: (price) => formatPrice(price)
         },
         {
             title: 'Stock',
@@ -106,28 +318,89 @@ const Products = () => {
         setIsModalVisible(true);
     };
 
-    const handleDelete = (product) => {
+    const handleDelete = async (product) => {
+        if (!isAdmin) {
+            message.error("Vous n'avez pas les droits d'administration nécessaires");
+            return;
+        }
+
         Modal.confirm({
             title: 'Êtes-vous sûr de vouloir supprimer ce produit ?',
             content: 'Cette action est irréversible.',
             okText: 'Oui',
             cancelText: 'Non',
-            onOk: () => {
-                message.success('Produit supprimé avec succès');
+            onOk: async () => {
+                try {
+                    await deleteDoc(doc(db, 'products', product.id));
+                    message.success('Produit supprimé avec succès');
+                    fetchProducts();
+                } catch (error) {
+                    console.error("Erreur lors de la suppression:", error);
+                    message.error("Erreur lors de la suppression");
+                }
             },
         });
     };
 
-    const handleSubmit = (values) => {
-        console.log(values);
-        message.success(`Produit ${editingProduct ? 'modifié' : 'ajouté'} avec succès`);
-        setIsModalVisible(false);
-        form.resetFields();
-        setEditingProduct(null);
+    const handleSubmit = async (values) => {
+        if (!isAdmin) {
+            message.error("Vous n'avez pas les droits d'administration nécessaires");
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            setIsModalVisible(false);
+
+            // Gérer l'upload de l'image
+            let imageUrl = null;
+            if (values.image && values.image.fileList && values.image.fileList[0]) {
+                const file = values.image.fileList[0].originFileObj;
+                imageUrl = await handleImageUpload(file);
+            }
+
+            if (editingProduct) {
+                await updateDoc(doc(db, 'products', editingProduct.id), {
+                    name: values.name,
+                    price: parseFloat(values.price),
+                    stock: values.stock,
+                    category: values.category,
+                    description: values.description,
+                    imageUrl: imageUrl || editingProduct.imageUrl
+                });
+                message.success('Produit modifié avec succès');
+            } else {
+                await addDoc(collection(db, 'products'), {
+                    name: values.name,
+                    price: parseFloat(values.price),
+                    stock: values.stock,
+                    category: values.category,
+                    description: values.description,
+                    imageUrl: imageUrl,
+                    createdAt: new Date().toISOString()
+                });
+                message.success('Produit ajouté avec succès');
+            }
+
+            form.resetFields();
+            setEditingProduct(null);
+            fetchProducts();
+        } catch (error) {
+            console.error("Erreur lors de l'enregistrement:", error);
+            message.error("Une erreur est survenue");
+            setIsModalVisible(true);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
+    // Ne rendre le composant que si l'utilisateur est admin
+    if (!isAdmin) {
+        return <AdminLayout loading={true} />;
+    }
+
     return (
-        <AdminLayout>
+        <AdminLayout loading={loading || isSubmitting}>
             <div className="p-4 md:p-8 min-h-screen">
                 {/* En-tête de page */}
                 <div className="mb-6 md:mb-8">
@@ -152,9 +425,7 @@ const Products = () => {
                                             <p className="text-lg md:text-2xl font-semibold text-gray-900">
                                                 {stat.value}
                                             </p>
-                                            <span className={`ml-2 text-xs md:text-sm font-medium ${
-                                                stat.trend.includes('+') ? 'text-emerald-600' : 'text-rose-600'
-                                            }`}>
+                                            <span className="ml-2 text-xs md:text-sm font-medium text-gray-500">
                                                 {stat.trend}
                                             </span>
                                         </div>
@@ -178,7 +449,9 @@ const Products = () => {
                             <Input.Search 
                                 placeholder="Rechercher un produit..." 
                                 size="large"
-                                className="search-input w-full"
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                className="w-full"
                             />
                         </Col>
                         <Col xs={24} sm={12} md={6}>
@@ -186,7 +459,10 @@ const Products = () => {
                                 placeholder="Catégorie"
                                 size="large"
                                 className="w-full"
+                                value={categoryFilter}
+                                onChange={setCategoryFilter}
                                 options={[
+                                    { value: '', label: 'Toutes les catégories' },
                                     { value: 'huiles', label: 'Huiles' },
                                     { value: 'cremes', label: 'Crèmes' }
                                 ]}
@@ -197,7 +473,10 @@ const Products = () => {
                                 placeholder="Trier par"
                                 size="large"
                                 className="w-full"
+                                value={sortOrder}
+                                onChange={setSortOrder}
                                 options={[
+                                    { value: '', label: 'Sans tri' },
                                     { value: 'price_asc', label: 'Prix croissant' },
                                     { value: 'price_desc', label: 'Prix décroissant' },
                                     { value: 'stock_low', label: 'Stock faible' }
@@ -226,7 +505,7 @@ const Products = () => {
                     </Row>
                 </Card>
 
-                {/* Table responsive */}
+                {/* Table sans le loading prop car géré par AdminLayout */}
                 <Card className="overflow-x-auto">
                     <Table 
                         columns={columns} 
@@ -237,8 +516,7 @@ const Products = () => {
                         pagination={{
                             pageSize: 10,
                             showSizeChanger: true,
-                            showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} produits`,
-                            responsive: true
+                            showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} produits`
                         }}
                     />
                 </Card>
@@ -247,7 +525,14 @@ const Products = () => {
                 <Modal
                     title={editingProduct ? "Modifier le produit" : "Ajouter un produit"}
                     open={isModalVisible}
-                    onCancel={() => setIsModalVisible(false)}
+                    onCancel={() => {
+                        if (!isSubmitting) {
+                            setIsModalVisible(false);
+                            form.resetFields();
+                        }
+                    }}
+                    maskClosable={!isSubmitting}
+                    closable={!isSubmitting}
                     width={600}
                     footer={null}
                     style={{ top: 20 }}
@@ -262,16 +547,37 @@ const Products = () => {
                                 <Form.Item
                                     name="image"
                                     label="Image"
+                                    valuePropName="file"
                                 >
                                     <Upload.Dragger
+                                        name="file"
                                         maxCount={1}
                                         listType="picture-card"
                                         showUploadList={{showPreviewIcon: true}}
+                                        beforeUpload={(file) => {
+                                            // Vérifier le type et la taille du fichier
+                                            const isImage = file.type.startsWith('image/');
+                                            const isLt2M = file.size / 1024 / 1024 < 2;
+
+                                            if (!isImage) {
+                                                message.error('Vous ne pouvez uploader que des images!');
+                                            }
+                                            if (!isLt2M) {
+                                                message.error('L\'image doit faire moins de 2MB!');
+                                            }
+
+                                            return false; // Empêcher l'upload automatique
+                                        }}
                                     >
                                         <p className="ant-upload-drag-icon">
                                             <InboxOutlined />
                                         </p>
-                                        <p className="text-sm md:text-base">Cliquez ou glissez une image ici</p>
+                                        <p className="text-sm md:text-base">
+                                            Cliquez ou glissez une image ici
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            PNG, JPG jusqu'à 2MB
+                                        </p>
                                     </Upload.Dragger>
                                 </Form.Item>
                             </Col>
@@ -286,13 +592,14 @@ const Products = () => {
 
                                 <Form.Item
                                     name="price"
-                                    label="Prix"
+                                    label="Prix (FCFA)"
                                     rules={[{ required: true, message: 'Veuillez entrer le prix' }]}
                                 >
                                     <InputNumber
                                         className="w-full"
-                                        formatter={value => `${value}€`}
-                                        parser={value => value.replace('€', '')}
+                                        formatter={value => `${value} FCFA`}
+                                        parser={value => value.replace(' FCFA', '')}
+                                        min={0}
                                     />
                                 </Form.Item>
 
@@ -317,12 +624,26 @@ const Products = () => {
                                     />
                                 </Form.Item>
                             </Col>
+                            <Col xs={24}>
+                                <Form.Item
+                                    name="description"
+                                    label="Description"
+                                    rules={[{ required: true, message: 'Veuillez entrer une description' }]}
+                                >
+                                    <Input.TextArea 
+                                        rows={4}
+                                        placeholder="Décrivez votre produit..."
+                                        className="w-full"
+                                    />
+                                </Form.Item>
+                            </Col>
                         </Row>
 
                         <Form.Item className="mb-0 flex flex-col sm:flex-row justify-end gap-2">
                             <Button 
                                 onClick={() => setIsModalVisible(false)} 
                                 className="w-full sm:w-auto"
+                                disabled={isSubmitting}
                             >
                                 Annuler
                             </Button>
@@ -334,6 +655,8 @@ const Products = () => {
                                     color: 'white'
                                 }}
                                 className="w-full sm:w-auto border-none hover:bg-[#8B5E34] focus:bg-[#8B5E34] active:bg-[#8B5E34]"
+                                loading={isSubmitting}
+                                disabled={isSubmitting}
                             >
                                 {editingProduct ? 'Modifier' : 'Ajouter'}
                             </Button>

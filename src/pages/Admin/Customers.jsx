@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Table, Tag, Button, Modal, Card, Statistic, Input, Select, Avatar } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Table, Tag, Button, Modal, Card, Statistic, Input, Select, Avatar, message } from 'antd';
 import { 
     UserOutlined, 
     ShoppingOutlined, 
@@ -10,63 +10,145 @@ import {
     PhoneOutlined,
     EnvironmentOutlined
 } from '@ant-design/icons';
+import { db } from '../../config/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import AdminLayout from '../../components/Admin/Layout/AdminLayout';
 
 const Customers = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
-
-    const stats = [
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [searchText, setSearchText] = useState('');
+    const [stats, setStats] = useState([
         {
             title: "Total Clients",
-            value: 1250,
+            value: 0,
             icon: <UserOutlined />,
             color: "#8B5E34"
         },
         {
             title: "Clients Actifs",
-            value: 856,
+            value: 0,
             icon: <StarOutlined />,
             color: "#27ae60"
         },
         {
             title: "Commandes Moyennes",
-            value: "75€",
+            value: "0 FCFA",
             icon: <ShoppingOutlined />,
             color: "#e67e22"
         }
-    ];
+    ]);
 
-    const customers = [
-        {
-            id: 1,
-            name: 'Marie Dupont',
-            email: 'marie.dupont@email.com',
-            phone: '+33 6 12 34 56 78',
-            orders: 5,
-            totalSpent: '625.00€',
-            status: 'Actif',
-            lastOrder: '2024-03-20',
-            address: '123 Rue de Paris, 75001 Paris',
-            avatar: null,
-            joinDate: '2023-12-15',
-            favoriteProducts: ['Huile de Ricin', 'Beurre de Karité']
-        },
-        {
-            id: 2,
-            name: 'Jean Martin',
-            email: 'jean.martin@email.com',
-            phone: '+33 6 98 76 54 32',
-            orders: 3,
-            totalSpent: '289.99€',
-            status: 'Actif',
-            lastOrder: '2024-03-19',
-            address: '45 Avenue des Champs-Élysées, 75008 Paris',
-            avatar: null,
-            joinDate: '2024-01-05',
-            favoriteProducts: ['Huile de Coco']
+    // Fonction pour formater le prix en FCFA
+    const formatPrice = (price) => {
+        return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+    };
+
+    // Fonction pour formater la date
+    const formatDate = (timestamp) => {
+        if (!timestamp) return 'Non disponible';
+        
+        // Si c'est un timestamp Firestore
+        if (timestamp.seconds) {
+            const date = new Date(timestamp.seconds * 1000);
+            return new Intl.DateTimeFormat('fr-FR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            }).format(date);
         }
-    ];
+        
+        // Si c'est une date string
+        const date = new Date(timestamp);
+        return new Intl.DateTimeFormat('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(date);
+    };
+
+    // Charger les clients et leurs commandes
+    const fetchCustomers = async () => {
+        setLoading(true);
+        try {
+            // 1. Récupérer tous les utilisateurs de type 'user'
+            const usersQuery = query(
+                collection(db, 'users'),
+                where('type_user', '==', 'user')
+            );
+            const usersSnapshot = await getDocs(usersQuery);
+            const usersData = usersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            // 2. Récupérer toutes les commandes
+            const ordersSnapshot = await getDocs(collection(db, 'orders'));
+            const ordersData = ordersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            // 3. Associer les commandes aux utilisateurs
+            const customersWithOrders = usersData.map(user => {
+                const userOrders = ordersData.filter(order => order.userId === user.id);
+                const totalSpent = userOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+                const lastOrder = userOrders.length > 0 
+                    ? userOrders.sort((a, b) => b.date?.seconds - a.date?.seconds)[0].date
+                    : null;
+
+                return {
+                    ...user,
+                    orders: userOrders.length,
+                    totalSpent,
+                    lastOrder,
+                    status: userOrders.length > 0 ? 'Actif' : 'Inactif',
+                    favoriteProducts: [], // À implémenter si nécessaire
+                };
+            });
+
+            // 4. Calculer les statistiques
+            const activeCustomers = customersWithOrders.filter(c => c.status === 'Actif').length;
+            const totalOrders = customersWithOrders.reduce((sum, c) => sum + c.orders, 0);
+            const averageOrderValue = totalOrders > 0 
+                ? customersWithOrders.reduce((sum, c) => sum + c.totalSpent, 0) / totalOrders
+                : 0;
+
+            setStats([
+                {
+                    title: "Total Clients",
+                    value: customersWithOrders.length,
+                    icon: <UserOutlined />,
+                    color: "#8B5E34"
+                },
+                {
+                    title: "Clients Actifs",
+                    value: activeCustomers,
+                    icon: <StarOutlined />,
+                    color: "#27ae60"
+                },
+                {
+                    title: "Commandes Moyennes",
+                    value: formatPrice(averageOrderValue),
+                    icon: <ShoppingOutlined />,
+                    color: "#e67e22"
+                }
+            ]);
+
+            setCustomers(customersWithOrders);
+        } catch (error) {
+            console.error("Erreur lors du chargement des clients:", error);
+            message.error("Erreur lors du chargement des clients");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCustomers();
+    }, []);
 
     const columns = [
         {
@@ -78,10 +160,11 @@ const Customers = () => {
                         size={40} 
                         icon={<UserOutlined />} 
                         className="bg-[#8B5E34]"
-                        src={record.avatar}
                     />
                     <div>
-                        <div className="font-medium text-[#4A2B0F]">{record.name}</div>
+                        <div className="font-medium text-[#4A2B0F]">
+                            {record.firstName} {record.lastName}
+                        </div>
                         <div className="text-sm text-[#8B5E34]">{record.email}</div>
                     </div>
                 </div>
@@ -100,7 +183,7 @@ const Customers = () => {
             dataIndex: 'totalSpent',
             key: 'totalSpent',
             render: (total) => (
-                <span className="font-medium text-[#4A2B0F]">{total}</span>
+                <span className="font-medium text-[#4A2B0F]">{formatPrice(total)}</span>
             ),
         },
         {
@@ -131,7 +214,7 @@ const Customers = () => {
     ];
 
     return (
-        <AdminLayout>
+        <AdminLayout loading={loading}>
             <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                 {/* En-tête de page */}
                 <div className="mb-6 md:mb-8">
@@ -225,14 +308,13 @@ const Customers = () => {
                                     size={56} 
                                     icon={<UserOutlined />}
                                     className="bg-[#8B5E34]"
-                                    src={selectedCustomer.avatar}
                                 />
                                 <div>
                                     <h2 className="text-xl md:text-2xl font-medium text-[#4A2B0F]">
-                                        {selectedCustomer.name}
+                                        {selectedCustomer.firstName} {selectedCustomer.lastName}
                                     </h2>
                                     <p className="text-sm md:text-base text-[#8B5E34]">
-                                        Client depuis {selectedCustomer.joinDate}
+                                        Client depuis {formatDate(selectedCustomer.createdAt)}
                                     </p>
                                 </div>
                             </div>
@@ -261,11 +343,13 @@ const Customers = () => {
                                         </p>
                                         <p className="flex justify-between">
                                             <span>Montant total:</span>
-                                            <span className="font-medium">{selectedCustomer.totalSpent}</span>
+                                            <span className="font-medium">{formatPrice(selectedCustomer.totalSpent)}</span>
                                         </p>
                                         <p className="flex justify-between">
                                             <span>Dernière commande:</span>
-                                            <span className="font-medium">{selectedCustomer.lastOrder}</span>
+                                            <span className="font-medium">
+                                                {selectedCustomer.lastOrder ? formatDate(selectedCustomer.lastOrder) : 'Aucune commande'}
+                                            </span>
                                         </p>
                                     </div>
                                 </Card>

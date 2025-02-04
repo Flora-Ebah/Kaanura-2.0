@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import { CartProvider } from './context/CartContext';
 import Cart from './pages/Cart';
@@ -13,23 +13,58 @@ import Customers from './pages/Admin/Customers';
 import AdminSettings from './pages/Admin/Settings';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
+import { auth, db } from './config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import Loader from './components/Admin/Loader';
+
+// Composant de garde pour les routes admin
+const AdminRoute = ({ children }) => {
+  const [isAdmin, setIsAdmin] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        setIsAdmin(userDoc.data()?.type_user === 'admin');
+      } else {
+        setIsAdmin(false);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <Loader />;
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
+};
 
 const App = () => {
     return (
         <CartProvider>
             <Router> 
                 <Routes>
-                    {/* Routes Admin */}
+                    {/* Routes Admin protégées */}
                     <Route path="/admin/*" element={
-                        <div style={{ backgroundColor: '#fff5e6'}}>
-                            <Routes>
-                                <Route index element={<Dashboard />} />
-                                <Route path="products" element={<Products />} />
-                                <Route path="orders" element={<OrdersAdmin />} />
-                                <Route path="customers" element={<Customers />} />
-                                {/* Autres routes admin ici */}
-                            </Routes>
-                        </div>
+                        <AdminRoute>
+                            <div style={{ backgroundColor: '#fff5e6'}}>
+                                <Routes>
+                                    <Route index element={<Dashboard />} />
+                                    <Route path="products" element={<Products />} />
+                                    <Route path="orders" element={<OrdersAdmin />} />
+                                    <Route path="customers" element={<Customers />} />
+                                    <Route path="settings" element={<AdminSettings />} />
+                                </Routes>
+                            </div>
+                        </AdminRoute>
                     } />
 
                     {/* Routes d'authentification indépendantes */}
@@ -48,9 +83,6 @@ const App = () => {
                             </Routes>
                         </div>
                     } />
-
-                    {/* Route admin settings */}
-                    <Route path="/admin/settings" element={<AdminSettings />} />
                 </Routes>
             </Router>
         </CartProvider>

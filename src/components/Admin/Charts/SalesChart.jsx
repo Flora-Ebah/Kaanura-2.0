@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -11,6 +11,8 @@ import {
     Legend,
     Filler
 } from 'chart.js';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '../../../config/firebase';
 
 ChartJS.register(
     CategoryScale,
@@ -25,28 +27,128 @@ ChartJS.register(
 
 const SalesChart = () => {
     const [period, setPeriod] = useState('day');
+    const [chartData, setChartData] = useState({
+        labels: [],
+        data: []
+    });
 
-    const chartData = {
-        day: {
-            labels: ['8h', '10h', '12h', '14h', '16h', '18h', '20h'],
-            data: [1200, 1800, 2500, 2100, 2800, 3200, 2900]
-        },
-        week: {
-            labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-            data: [12500, 14800, 13200, 15500, 16800, 19200, 18500]
-        },
-        month: {
-            labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'],
-            data: [45000, 52000, 49000, 58000, 62000, 68000]
-        }
+    // Fonction pour formater le prix en FCFA
+    const formatPrice = (price) => {
+        return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
     };
 
+    // Fonction pour grouper les commandes par période
+    const groupOrdersByPeriod = (orders, period) => {
+        const groupedData = {};
+        
+        // Ne prendre en compte que les commandes livrées
+        const deliveredOrders = orders.filter(order => order.status === 'Livré');
+        
+        deliveredOrders.forEach(order => {
+            // Gérer les timestamps Firestore
+            const date = order.date?.seconds ? 
+                new Date(order.date.seconds * 1000) : 
+                new Date(order.date);
+            
+            let key;
+
+            switch(period) {
+                case 'day':
+                    key = `${date.getHours()}h`;
+                    break;
+                case 'week':
+                    key = date.toLocaleDateString('fr-FR', { weekday: 'short' });
+                    break;
+                case 'month':
+                    key = date.toLocaleDateString('fr-FR', { month: 'short' });
+                    break;
+                default:
+                    key = date.toISOString();
+            }
+
+            if (!groupedData[key]) {
+                groupedData[key] = 0;
+            }
+
+            // Calculer le total réel de la commande
+            const orderTotal = order.items.reduce((sum, item) => 
+                sum + (item.price * item.quantity), 0
+            );
+            groupedData[key] += orderTotal;
+        });
+
+        return groupedData;
+    };
+
+    useEffect(() => {
+        const fetchSalesData = async () => {
+            try {
+                const now = new Date();
+                const startDate = new Date();
+
+                // Définir la période de début selon le filtre
+                switch(period) {
+                    case 'day':
+                        startDate.setHours(0, 0, 0, 0);
+                        break;
+                    case 'week':
+                        startDate.setDate(now.getDate() - 7);
+                        break;
+                    case 'month':
+                        startDate.setMonth(now.getMonth() - 1);
+                        break;
+                }
+
+                // Modifier la requête pour utiliser les timestamps Firestore
+                const ordersQuery = query(
+                    collection(db, 'orders'),
+                    orderBy('date', 'desc')  // Supprimer les where clauses pour l'instant
+                );
+
+                const snapshot = await getDocs(ordersQuery);
+                const orders = snapshot.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id
+                }));
+
+                // Filtrer les commandes selon la période après récupération
+                const filteredOrders = orders.filter(order => {
+                    const orderDate = order.date?.seconds ? 
+                        new Date(order.date.seconds * 1000) : 
+                        new Date(order.date);
+                    return orderDate >= startDate && orderDate <= now;
+                });
+
+                // Grouper les données par période avec le nouveau calcul de total
+                const groupedData = groupOrdersByPeriod(filteredOrders, period);
+
+                // Trier les clés pour l'affichage chronologique
+                const sortedLabels = Object.keys(groupedData).sort((a, b) => {
+                    if (period === 'day') {
+                        return parseInt(a) - parseInt(b);
+                    }
+                    return 0; // Pour les autres périodes, garder l'ordre naturel
+                });
+
+                setChartData({
+                    labels: sortedLabels,
+                    data: sortedLabels.map(label => groupedData[label])
+                });
+
+            } catch (error) {
+                console.error("Erreur lors du chargement des données de vente:", error);
+            }
+        };
+
+        fetchSalesData();
+    }, [period]);
+
     const data = {
-        labels: chartData[period].labels,
+        labels: chartData.labels,
         datasets: [
             {
-                label: 'Ventes',
-                data: chartData[period].data,
+                label: 'Ventes (commandes livrées)',
+                data: chartData.data,
                 borderColor: '#8B5E34',
                 backgroundColor: (context) => {
                     const ctx = context.chart.ctx;
@@ -65,10 +167,7 @@ const SalesChart = () => {
                 pointHoverRadius: 8,
                 pointHoverBorderWidth: 3,
                 pointHoverBackgroundColor: '#8B5E34',
-                pointHoverBorderColor: '#FFFFFF',
-                pointShadowOffsetY: 3,
-                pointShadowBlur: 5,
-                pointShadowColor: 'rgba(0, 0, 0, 0.1)'
+                pointHoverBorderColor: '#FFFFFF'
             }
         ]
     };
@@ -101,7 +200,7 @@ const SalesChart = () => {
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 callbacks: {
                     label: function(context) {
-                        return `${context.parsed.y.toLocaleString('fr-FR')} €`;
+                        return formatPrice(context.parsed.y);
                     },
                     title: function(context) {
                         const title = context[0].label;
@@ -146,9 +245,9 @@ const SalesChart = () => {
                     padding: 12,
                     callback: function(value) {
                         if (value >= 1000) {
-                            return `${(value / 1000).toLocaleString('fr-FR')}k €`;
+                            return formatPrice(value / 1000) + 'k';
                         }
-                        return `${value.toLocaleString('fr-FR')} €`;
+                        return formatPrice(value);
                     }
                 }
             }

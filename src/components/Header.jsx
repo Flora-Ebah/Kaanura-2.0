@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
     UserOutlined, 
@@ -14,21 +14,38 @@ import {
     SettingOutlined,
     LogoutOutlined
 } from '@ant-design/icons';
-import { Drawer, Dropdown } from 'antd';
+import { Drawer, Dropdown, message } from 'antd';
 import { useCart } from '../context/CartContext';
+import { auth } from '../config/firebase';
+import { signOut } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const Header = () => {
-    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-    const { getCartCount } = useCart();
-    // Simuler un état de connexion (à remplacer par votre logique d'authentification)
-    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const { cartCount } = useCart();
+    const [user, setUser] = useState(null);
     const navigate = useNavigate();
 
-    const toggleMenu = () => {
-        setIsMenuOpen(!isMenuOpen);
+    // Écouter l'état de l'authentification
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            message.success("Déconnexion réussie");
+        } catch (error) {
+            console.error("Erreur lors de la déconnexion:", error);
+            message.error("Erreur lors de la déconnexion");
+        }
     };
 
-    const userMenuItems = [
+    const userMenuItems = user ? [
         {
             key: '1',
             label: 'Vos commandes',
@@ -37,12 +54,6 @@ const Header = () => {
         },
         {
             key: '2',
-            label: 'Vos avis',
-            icon: <StarOutlined />,
-            onClick: () => console.log('Vos avis clicked')
-        },
-        {
-            key: '3',
             label: 'Paramètres',
             icon: <SettingOutlined />,
             onClick: () => navigate('/settings')
@@ -51,15 +62,23 @@ const Header = () => {
             type: 'divider'
         },
         {
-            key: '4',
+            key: '3',
             label: 'Déconnexion',
             icon: <LogoutOutlined />,
-            onClick: () => {
-                setIsLoggedIn(false);
-                console.log('Déconnexion clicked');
-            }
+            onClick: handleLogout
+        }
+    ] : [
+        {
+            key: '1',
+            label: 'Connexion',
+            icon: <UserOutlined />,
+            onClick: () => navigate('/login')
         }
     ];
+
+    const toggleMenu = () => {
+        setIsMenuOpen(!isMenuOpen);
+    };
 
     const scrollToSection = (e, id) => {
         // Empêcher le comportement par défaut du lien
@@ -130,7 +149,7 @@ const Header = () => {
                     >
                         <button className="text-[#4a2b0f] dark:text-white hover:text-[#795f45] text-lg relative">
                             <UserOutlined className="text-xl" />
-                            {isLoggedIn && (
+                            {user && (
                                 <CheckCircleFilled className="text-green-500 text-sm absolute -top-1 -right-2" />
                             )}
                         </button>
@@ -140,9 +159,9 @@ const Header = () => {
                         className="relative text-[#4a2b0f] dark:text-white hover:text-[#795f45] text-lg"
                     >
                         <ShoppingCartOutlined className="text-xl" />
-                        {getCartCount() > 0 && (
+                        {cartCount > 0 && (
                             <span className="absolute -top-1 -right-2 bg-[#795f45] text-white text-xs rounded-full px-1">
-                                {getCartCount()}
+                                {cartCount}
                             </span>
                         )}
                     </button>

@@ -1,6 +1,72 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { auth, db } from '../config/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 
 const SignUp = () => {
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const formData = new FormData(e.target);
+    const data = {
+      email: formData.get('email'),
+      password: formData.get('password'),
+      confirmPassword: formData.get('confirmPassword'),
+      firstName: formData.get('firstName'),
+      lastName: formData.get('lastName'),
+      phone: formData.get('phone'),
+    };
+
+    if (data.password !== data.confirmPassword) {
+      setError('Les mots de passe ne correspondent pas');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Créer l'utilisateur dans Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        data.email,
+        data.password
+      );
+
+      // 2. Attendre que l'authentification soit terminée
+      const user = userCredential.user;
+
+      // 3. Créer le document utilisateur dans Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        type_user: 'user',
+        createdAt: new Date().toISOString(),
+      });
+
+      // 4. Rediriger vers la page de connexion
+      navigate('/login');
+    } catch (err) {
+      console.error('Erreur lors de l\'inscription:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Cet email est déjà utilisé');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Le mot de passe doit contenir au moins 6 caractères');
+      } else {
+        setError('Une erreur est survenue lors de l\'inscription. Veuillez réessayer.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat sm:bg-[url('/background-2.png')] bg-[url('/5-1.png')]">
       <div className="w-full max-w-[1000px] grid md:grid-cols-2 gap-8 bg-[#1A1A1A]/80 rounded-2xl p-8">
@@ -16,7 +82,14 @@ const SignUp = () => {
         {/* Formulaire d'inscription */}
         <div className="bg-[#222] rounded-xl p-6">
           <h2 className="text-2xl font-bold text-white mb-6">Inscription</h2>
-          <form id="signupForm" className="space-y-4">
+          
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Nom et Prénom */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -95,8 +168,9 @@ const SignUp = () => {
             <button 
               className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
               type="submit"
+              disabled={loading}
             >
-              Créer un compte
+              {loading ? 'Création en cours...' : 'Créer un compte'}
             </button>
 
             {/* Séparateur */}

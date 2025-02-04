@@ -1,37 +1,92 @@
-import React from 'react';
-import { Table } from 'antd';
-import { ArrowUpOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Table, message } from 'antd';
+import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../config/firebase';
 
 const TopProducts = () => {
-    const products = [
-        {
-            id: 1,
-            name: 'Huile de Ricin',
-            image: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=800&auto=format&fit=crop&q=60',
-            sales: 89,
-            revenue: '2,670€',
-            progress: 85,
-            trend: '+12%'
-        },
-        {
-            id: 2,
-            name: 'Huile de Coco',
-            image: 'https://images.unsplash.com/photo-1550831107-1553da8c8464?w=800&auto=format&fit=crop&q=60',
-            sales: 75,
-            revenue: '1,875€',
-            progress: 70,
-            trend: '+8%'
-        },
-        {
-            id: 3,
-            name: 'Beurre de Karité',
-            image: 'https://images.unsplash.com/photo-1601300576246-965c4296b9d9?w=800&auto=format&fit=crop&q=60',
-            sales: 68,
-            revenue: '1,360€',
-            progress: 65,
-            trend: '+15%'
-        }
-    ];
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    // Fonction pour formater le prix en FCFA
+    const formatPrice = (price) => {
+        return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+    };
+
+    // Fonction pour calculer la tendance
+    const calculateTrend = (currentSales, previousSales) => {
+        if (!previousSales) return { value: 0, isPositive: true };
+        const trend = ((currentSales - previousSales) / previousSales) * 100;
+        return {
+            value: Math.abs(trend).toFixed(1),
+            isPositive: trend >= 0
+        };
+    };
+
+    useEffect(() => {
+        setLoading(true);
+        
+        const productsQuery = query(
+            collection(db, 'orders'),
+            orderBy('date', 'desc')
+        );
+
+        const unsubscribe = onSnapshot(productsQuery, async (snapshot) => {
+            try {
+                // Créer un map pour suivre les ventes par produit
+                const salesMap = new Map();
+                const revenueMap = new Map();
+
+                // Analyser toutes les commandes pour calculer les ventes
+                snapshot.docs.forEach(doc => {
+                    const order = doc.data();
+                    if (order.items && Array.isArray(order.items)) {
+                        order.items.forEach(item => {
+                            const currentSales = salesMap.get(item.id) || 0;
+                            const currentRevenue = revenueMap.get(item.id) || 0;
+                            
+                            salesMap.set(item.id, currentSales + item.quantity);
+                            revenueMap.set(item.id, currentRevenue + (item.price * item.quantity));
+                        });
+                    }
+                });
+
+                // Récupérer les informations des produits
+                const productsSnapshot = await getDocs(collection(db, 'products'));
+                const productsData = productsSnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const sales = salesMap.get(doc.id) || 0;
+                    const revenue = revenueMap.get(doc.id) || 0;
+                    const trend = calculateTrend(sales, data.previousSales || 0);
+
+                    return {
+                        id: doc.id,
+                        name: data.name,
+                        image: data.imageUrl,
+                        category: data.category || 'Cosmétique naturel',
+                        sales: sales,
+                        revenue: revenue,
+                        progress: Math.min(100, (sales / (Math.max(...salesMap.values()))) * 100),
+                        trend
+                    };
+                });
+
+                // Trier par ventes et prendre les 5 premiers
+                const topProducts = productsData
+                    .sort((a, b) => b.sales - a.sales)
+                    .slice(0, 5);
+
+                setProducts(topProducts);
+            } catch (error) {
+                console.error("Erreur lors du chargement des produits populaires:", error);
+                message.error("Erreur lors du chargement des produits populaires");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     const columns = [
         {
@@ -46,13 +101,13 @@ const TopProducts = () => {
                             alt={text}
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                                e.target.src = 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=800&auto=format&fit=crop&q=60';
+                                e.target.src = '/default-product.png';
                             }}
                         />
                     </div>
                     <div>
                         <p className="font-medium text-gray-800">{text}</p>
-                        <p className="text-xs text-gray-500">Cosmétique naturel</p>
+                        <p className="text-xs text-gray-500">{record.category}</p>
                     </div>
                 </div>
             )
@@ -64,9 +119,14 @@ const TopProducts = () => {
             render: (sales, record) => (
                 <div>
                     <p className="font-medium text-gray-800">{sales} unités</p>
-                    <p className="text-xs text-green-600 flex items-center gap-1">
-                        {record.trend}
-                        <ArrowUpOutlined className="text-xs" />
+                    <p className={`text-xs flex items-center gap-1 ${
+                        record.trend.isPositive ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                        {record.trend.isPositive ? '+' : '-'}{record.trend.value}%
+                        {record.trend.isPositive ? 
+                            <ArrowUpOutlined className="text-xs" /> : 
+                            <ArrowDownOutlined className="text-xs" />
+                        }
                     </p>
                 </div>
             )
@@ -76,7 +136,7 @@ const TopProducts = () => {
             dataIndex: 'revenue',
             key: 'revenue',
             render: (revenue) => (
-                <span className="font-medium text-gray-800">{revenue}</span>
+                <span className="font-medium text-gray-800">{formatPrice(revenue)}</span>
             )
         },
         {
@@ -86,7 +146,7 @@ const TopProducts = () => {
             render: (progress) => (
                 <div className="w-full">
                     <div className="flex justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700">{progress}%</span>
+                        <span className="text-xs font-medium text-gray-700">{Math.round(progress)}%</span>
                     </div>
                     <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div 
@@ -107,6 +167,7 @@ const TopProducts = () => {
                     dataSource={products} 
                     pagination={false}
                     rowKey="id"
+                    loading={loading}
                     className="top-products-table min-w-[800px]"
                     rowClassName="hover:bg-gray-50 transition-colors"
                 />

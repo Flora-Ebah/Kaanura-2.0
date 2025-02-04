@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     ShoppingOutlined, 
     UserOutlined, 
@@ -7,6 +7,8 @@ import {
     CalendarOutlined,
     FilterOutlined
 } from '@ant-design/icons';
+import { auth, db } from '../../config/firebase';
+import { doc, getDoc, collection, query, getDocs, where } from 'firebase/firestore';
 import AdminLayout from '../../components/Admin/Layout/AdminLayout';
 import StatsCard from '../../components/Admin/StatsCard';
 import SalesChart from '../../components/Admin/Charts/SalesChart';
@@ -16,44 +18,146 @@ import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    
-    const stats = [
-        {
-            title: "Ventes totales",
-            value: "12,500€",
-            icon: <DollarOutlined />,
-            trend: "+15%",
-            color: "#4CAF50"
-        },
-        {
-            title: "Commandes",
-            value: "150",
-            icon: <ShoppingCartOutlined />,
-            trend: "+8%",
-            color: "#2196F3"
-        },
-        {
-            title: "Produits",
-            value: "48",
-            icon: <ShoppingOutlined />,
-            trend: "+12%",
-            color: "#FF9800"
-        },
-        {
-            title: "Clients",
-            value: "1,250",
-            icon: <UserOutlined />,
-            trend: "+25%",
-            color: "#9C27B0"
-        }
-    ];
+    const [adminName, setAdminName] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [stats, setStats] = useState([]);
+
+    // Fonction pour formater le prix en FCFA
+    const formatPrice = (price) => {
+        return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+    };
+
+    // Fonction pour calculer la variation en pourcentage
+    const calculateTrend = (current, previous) => {
+        if (!previous) return '+0%';
+        const trend = ((current - previous) / previous) * 100;
+        return `${trend > 0 ? '+' : ''}${trend.toFixed(1)}%`;
+    };
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            setLoading(true);
+            try {
+                // Récupérer les données de l'admin
+                const user = auth.currentUser;
+                if (user) {
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setAdminName(`${userData.firstName} ${userData.lastName}`);
+                    }
+                }
+
+                // Dates pour les comparaisons
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+                // Récupérer les commandes
+                const ordersQuery = query(collection(db, 'orders'));
+                const ordersSnapshot = await getDocs(ordersQuery);
+                const orders = ordersSnapshot.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id
+                }));
+
+                // Calculer les ventes totales (uniquement commandes livrées)
+                const totalSales = orders
+                    .filter(order => order.status === 'Livré')
+                    .reduce((sum, order) => {
+                        // Calculer le total réel pour chaque commande
+                        const orderTotal = order.items.reduce((itemSum, item) => 
+                            itemSum + (item.price * item.quantity), 0
+                        );
+                        return sum + orderTotal;
+                    }, 0);
+
+                // Calculer les ventes mensuelles (uniquement commandes livrées)
+                const currentMonthOrders = orders.filter(order => 
+                    new Date(order.date.seconds * 1000) >= startOfMonth &&
+                    order.status === 'Livré'
+                );
+                const prevMonthOrders = orders.filter(order => 
+                    new Date(order.date.seconds * 1000) >= startOfPrevMonth && 
+                    new Date(order.date.seconds * 1000) < startOfMonth &&
+                    order.status === 'Livré'
+                );
+
+                const currentMonthSales = currentMonthOrders.reduce((sum, order) => {
+                    const orderTotal = order.items.reduce((itemSum, item) => 
+                        itemSum + (item.price * item.quantity), 0
+                    );
+                    return sum + orderTotal;
+                }, 0);
+
+                const prevMonthSales = prevMonthOrders.reduce((sum, order) => {
+                    const orderTotal = order.items.reduce((itemSum, item) => 
+                        itemSum + (item.price * item.quantity), 0
+                    );
+                    return sum + orderTotal;
+                }, 0);
+
+                // Récupérer les produits et clients
+                const productsSnapshot = await getDocs(collection(db, 'products'));
+                const usersSnapshot = await getDocs(query(
+                    collection(db, 'users'),
+                    where('type_user', '==', 'user')
+                ));
+
+                // Mettre à jour les stats
+                setStats([
+                    {
+                        title: "Ventes totales",
+                        value: formatPrice(totalSales),
+                        icon: <DollarOutlined />,
+                        trend: calculateTrend(currentMonthSales, prevMonthSales),
+                        color: "#4CAF50",
+                        tooltip: "Total des ventes des commandes livrées"
+                    },
+                    {
+                        title: "Commandes",
+                        value: orders.length,
+                        icon: <ShoppingCartOutlined />,
+                        trend: calculateTrend(
+                            currentMonthOrders.length,
+                            prevMonthOrders.length
+                        ),
+                        color: "#2196F3"
+                    },
+                    {
+                        title: "Produits",
+                        value: productsSnapshot.size,
+                        icon: <ShoppingOutlined />,
+                        trend: "+0%", // À implémenter si nécessaire
+                        color: "#FF9800"
+                    },
+                    {
+                        title: "Clients",
+                        value: usersSnapshot.size,
+                        icon: <UserOutlined />,
+                        trend: "+0%", // À implémenter si nécessaire
+                        color: "#9C27B0"
+                    }
+                ]);
+
+            } catch (error) {
+                console.error("Erreur lors du chargement des données:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
 
     const dashboardContent = (
         <div className="p-6 space-y-6">
             {/* En-tête avec filtres */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between bg-white p-6 rounded-xl shadow-sm">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Bonjour, Admin 👋</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">
+                        Bonjour, {adminName || 'Admin'} 👋
+                    </h1>
                     <p className="text-gray-600 mt-1">Voici le résumé de votre activité</p>
                 </div>
                 
@@ -150,7 +254,7 @@ const Dashboard = () => {
         </div>
     );
 
-    return <AdminLayout>{dashboardContent}</AdminLayout>;
+    return <AdminLayout loading={loading}>{dashboardContent}</AdminLayout>;
 };
 
 export default Dashboard; 
